@@ -1,4 +1,5 @@
 import time
+import os
 import pandas as pd
 import numpy as np
 from tensorflow import keras
@@ -14,6 +15,10 @@ vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=m
 text_ds = tf.data.Dataset.from_tensor_slices(train_samples).batch(128)
 vectorizer.adapt(text_ds)
 
+# this will have to be changed locally
+# get the glove library at http://nlp.stanford.edu/data/glove.6B.zip
+# its a pretty beefy file (abt 2gb fully extracted)
+# path_to_glove_file = os.path.join( os.path.expanduser("~"), "D:/random big files/Machine Learning/glove.6B.100d") #Beef path
 path_to_glove_file = os.path.join( os.path.expanduser("~"), "D:/random big files/Machine Learning/glove.6B.100d")
 
 embeddings_index = {}
