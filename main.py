@@ -125,8 +125,19 @@ if __name__ == "__main__":
     test = loadData("test.csv", False)  # make sure this is inside the repo on your local - it's in the gitignore
     train_X = train[:, :-1]
     train_Y = train[:, -1]
-    test_X = test  # there is no Y data (no score) for test data in this set
-    test_Y = train_Y #TODO lable the test y values
+    print("Y shape is: ", train_Y.shape)
+    # ^ Before Validation
+    n = train_X.shape[0]
+    #print("Sample size is: ", n)
+    validation_n = int(n*0.2)
+    validation_indices = np.arange(validation_n)
+    np.random.shuffle(validation_indices)
+    #validation_indices = np.random.shuffle(validation_n)
+    train_X = np.delete(train_X, validation_indices)
+    train_Y = np.delete(train_Y, validation_indices)
+
+    test_X = train_X[validation_indices]    # there is no Y data (no score) for test data in this set
+    test_Y = train_Y[validation_indices]    #
     # Shallow Model
 
     # Shallow keras
