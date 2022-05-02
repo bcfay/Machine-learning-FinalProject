@@ -119,7 +119,7 @@ if __name__ == "__main__":
     train_X = train[:, :-1]
     train_Y = train[:, -1]
     test_X = test  # there is no Y data (no score) for test data in this set
-    test_Y = 0 #TODO get the test y values
+    test_Y = 0 #TODO lable the test y values
     # Shallow Model
 
     # Shallow keras
