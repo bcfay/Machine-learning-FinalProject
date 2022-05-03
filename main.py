@@ -74,50 +74,58 @@ def generate_siamese_model(x_train, x_test):
                                 embeddings_initializer=keras.initializers.Constant(embedding_matrix),
                                 trainable=False))
     # Add bidirectional LSTMs w/ decreasing dimentionality
+    encoder_model.add(layers.Bidirectional(layers.LSTM(256, return_sequences=True)))
     encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
-    encoder_model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
-    encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
+    encoder_model.add(layers.Bidirectional(layers.LSTM(128)))
 
     context_encoder_model = keras.Sequential()
     context_encoder_model.add(Embedding(num_tokens, word_vec_len,
                                         embeddings_initializer=keras.initializers.Constant(embedding_matrix),
                                         trainable=False))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(256, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
-    context_encoder_model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
-    context_encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(128)))
 
     encoder_model.summary()
 
-    [print(i.shape, i.dtype) for i in encoder_model.inputs]
-    [print(o.shape, o.dtype) for o in encoder_model.outputs]
-    [print(l.name, l.input_shape, l.dtype) for l in encoder_model.layers]
+    # [print(i.shape, i.dtype) for i in encoder_model.inputs]
+    # [print(o.shape, o.dtype) for o in encoder_model.outputs]
+    # [print(l.name, l.input_shape, l.dtype) for l in encoder_model.layers]
 
     context_encoder_model.summary()
-
-    [print(i.shape, i.dtype) for i in context_encoder_model.inputs]
-    [print(o.shape, o.dtype) for o in context_encoder_model.outputs]
-    [print(l.name, l.input_shape, l.dtype) for l in context_encoder_model.layers]
+    #
+    # [print(i.shape, i.dtype) for i in context_encoder_model.inputs]
+    # [print(o.shape, o.dtype) for o in context_encoder_model.outputs]
+    # [print(l.name, l.input_shape, l.dtype) for l in context_encoder_model.layers]
 
     encoded_l = encoder_model(left_input)
     encoded_r = encoder_model(right_input)
     encoded_c = context_encoder_model(context_input)
 
     merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
-    DNN = layers.Dense(50, activation="tanh")(merged)
-    DNN = layers.Dropout(.2,input_shape=(20,), activation="tanh")(merged)
-    # DNN = layers.Dense(100, activation="relu")(DNN)
-    # DNN = layers.Dense(50, activation="relu")(DNN)
-    DNN = layers.Dense(10, activation="relu")(DNN)
+    dropout_rate = .01
+    DNN = layers.Dense(200, activation="tanh")(merged)
+    DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
+    DNN = layers.Dense(200, activation="tanh")(DNN)
+    DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
+    DNN = layers.Dense(50, activation="relu")(DNN)
+    DNN = layers.Dropout(dropout_rate,input_shape=(50,))(DNN)
+    DNN = layers.Dense(30, activation="relu")(DNN)
+    DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
+    DNN = layers.Dense(30, activation="relu")(DNN)
+    DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
 
     # Add a classifier
     outputs = layers.Dense(1, activation="sigmoid")(DNN)
+    # outputs = tensorflow.round(outputs)
+
 
     siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
     siam_model.summary()
 
-    [print(i.shape, i.dtype) for i in siam_model.inputs]
-    [print(o.shape, o.dtype) for o in siam_model.outputs]
-    [print(l.name, l.input_shape, l.dtype) for l in siam_model.layers]
+    # [print(i.shape, i.dtype) for i in siam_model.inputs]
+    # [print(o.shape, o.dtype) for o in siam_model.outputs]
+    # [print(l.name, l.input_shape, l.dtype) for l in siam_model.layers]
 
     # return the model
     return siam_model, voc
@@ -139,12 +147,14 @@ def loadData(filepath, isTrain):
         df.replace(to_replace=code, value=val, inplace=True)
     rawContexts = df["context"]
     listOfContextStrings = []
+    #TODO make this a helper function
     for index, expression in enumerate(rawContexts):
         expression = expression.replace("[", '')
         expression = expression.replace("]", '')
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
+        expression = expression.replace(' - ', '-')
         words = np.array(expression.split(' '))
         # print(words)
 
@@ -159,6 +169,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
+        expression = expression.replace(' - ', '-')
         words = np.array(expression.split(' '))
         # print(words)
         listOfTargetStrings.append(words)
@@ -170,6 +181,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace("]", '')
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
+        expression = expression.replace(' - ', '-')
         expression = expression.replace(',', '')
         words = np.array(expression.split(' '))
         # print(words)
@@ -210,7 +222,7 @@ def loadData(filepath, isTrain):
 def DNN_main(x_train, y_train, x_test, y_test):
     # DNN setup
     print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
-
+    print("x_train", x_train, "y_train", y_train, "x_test", x_test, "y_test", y_test)
 
     model, voc = generate_siamese_model(x_train, x_test)
     temp_x_train = np.empty_like(x_train, dtype=int)
@@ -242,9 +254,15 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
 
-    model.compile("adam", "mean_squared_error", metrics=["accuracy"])
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=548, epochs=50,
+    model.compile("adam", "mean_squared_error", metrics=["accuracy","binary_accuracy"])
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=256, epochs=50,
               validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
+    print(test)
+    print(model.pred(test))
+    print(model.pred([temp_x_test_t, temp_x_test_a, temp_x_test_c]))
+    model.save('my_model')
+    return model
+
 
 
 if __name__ == "__main__":
@@ -296,5 +314,6 @@ if __name__ == "__main__":
     # Shallow keras
 
     # Main Keras (Deep)
-    DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
+    model = DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
     # Output what we need for the submission
+    print(model.predict(test))
