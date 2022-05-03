@@ -144,7 +144,7 @@ def loadData(filepath, isTrain):
         #print(words)
         listOfTargetStrings.append(words)
 
-    raw_anchors = df["target"]
+    raw_anchors = df["anchor"]
     listOfAnchorStrings = []
     for index, expression in enumerate(raw_anchors):
         expression = expression.replace("[", '')
