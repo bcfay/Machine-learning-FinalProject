@@ -276,17 +276,25 @@ def DNN_main(x_train, y_train, x_test, y_test):
     print("Predicting.")
     pred = model.predict([temp_x_test_t, temp_x_test_a, temp_x_test_c])
     worst_num = 5
-    worst = [pred[:worst_num, 0] - y_test[:worst_num, 0], x_test[:worst_num, i]]
-    for i in range(y_test.shape[1]):
+    worst_delta = [pred[:worst_num, 0] - y_test[:worst_num, 0]]
+    worst_data = x_test[:, :worst_num]
+    for i in range(y_test.shape[0]):
         delta = pred[i, 0] - y_test[i, 0]
-        print("prediction:", pred[i][0], "truth:", y_test[i][0], "delta:", delta)
-        print("anchor data:", x_test[0, i], "target:", x_test[1, i], "context:", x_test[2, i])
-        for i in range(worst_num):
-            if (delta > worst[0][i]):
-                worst[0][i] = delta
-                worst[1][i] = x_test[:, i]
 
-    print(worst)
+        for i in range(worst_num):
+            if (delta > worst_delta[i]):
+                worst_delta[i] = delta
+                print("prediction:", pred[i][0], "truth:", y_test[i][0], "delta:", delta)
+                print("anchor data:", x_test[0, i], "target:", x_test[1, i], "context:", x_test[2, i])
+                print(worst_data[:, i])
+                print(x_test[:, i])
+                worst_data[:, i] = x_test[:, i]
+
+    print("Worst deltas:", delta)
+    print("anchor data:", worst_data[0, :], "target:", worst_data[1, :], "context:", worst_data[2, :])
+
+    print(worst_delta)
+    print(worst_data)
     model.save('my_model')
     return model
 
