@@ -104,6 +104,7 @@ def generate_siamese_model(x_train, x_test):
 
     merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
     DNN = layers.Dense(50, activation="tanh")(merged)
+    DNN = layers.Dropout(.2,input_shape=(20,) activation="tanh")(merged)
     # DNN = layers.Dense(100, activation="relu")(DNN)
     # DNN = layers.Dense(50, activation="relu")(DNN)
     DNN = layers.Dense(10, activation="relu")(DNN)
@@ -242,7 +243,7 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
 
     model.compile("adam", "mean_squared_error", metrics=["accuracy"])
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=128, epochs=50,
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=548, epochs=50,
               validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
 
 
