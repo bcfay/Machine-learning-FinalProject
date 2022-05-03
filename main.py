@@ -19,15 +19,16 @@ maxlen = 20  # pad length
 
 def generate_siamese_model(x_train, x_test):
     # Define the tensors for the two input images
-    left_input = keras.Input(shape=(None, maxlen, 300))
-    right_input = keras.Input(shape=(None, maxlen, 300))
-    context_input = keras.Input(shape=(None, maxlen, 300))
-    max_features = 20000  # Only consider the top 20k words
+    left_input = keras.Input(maxlen, dtype='int32')
+    right_input = keras.Input(maxlen, dtype='int32')
+    context_input = keras.Input(maxlen, dtype='int32')
+    max_features = 50000  # Only consider the top 20k words
     word_vec_len = word_vec_options[3]
 
     # ---------- glove embedding ----------
     vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=word_vec_len)
-    text_ds = tensorflow.data.Dataset.from_tensor_slices(np.hstack((x_train[:, 0:1], x_test[:, 0:1]))).batch(
+    hbug = np.hstack((x_train[0:3], x_test[0:3])).flatten()
+    text_ds = tensorflow.data.Dataset.from_tensor_slices(hbug).batch(
         128)  # TODO see if we can get the words from the other datasets in here
     vectorizer.adapt(text_ds)
 
@@ -67,33 +68,45 @@ def generate_siamese_model(x_train, x_test):
             misses += 1
     print("Converted %d words (%d misses)" % (hits, misses))
 
-    # Input for variable-length sequences of integers
     encoder_model = keras.Sequential()
     # Embed each integer in a glove vector
     encoder_model.add(Embedding(num_tokens, word_vec_len,
                                 embeddings_initializer=keras.initializers.Constant(embedding_matrix),
-                                trainable=False, ))
+                                trainable=False))
     # Add bidirectional LSTMs w/ decreasing dimentionality
-    encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
-    encoder_model.add(layers.Bidirectional(layers.LSTM(64)))
+    encoder_model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
+    # encoder_model.add(layers.Bidirectional(layers.LSTM(32, return_sequences=True)))
     encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
 
     context_encoder_model = keras.Sequential()
     context_encoder_model.add(Embedding(num_tokens, word_vec_len,
                                         embeddings_initializer=keras.initializers.Constant(embedding_matrix),
-                                        trainable=False, ))
-    context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
-    context_encoder_model.add(layers.Bidirectional(layers.LSTM(64)))
+                                        trainable=False))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
+    # context_encoder_model.add(layers.Bidirectional(layers.LSTM(32, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
+
+    encoder_model.summary()
+
+    [print(i.shape, i.dtype) for i in encoder_model.inputs]
+    [print(o.shape, o.dtype) for o in encoder_model.outputs]
+    [print(l.name, l.input_shape, l.dtype) for l in encoder_model.layers]
+
+    context_encoder_model.summary()
+
+    [print(i.shape, i.dtype) for i in context_encoder_model.inputs]
+    [print(o.shape, o.dtype) for o in context_encoder_model.outputs]
+    [print(l.name, l.input_shape, l.dtype) for l in context_encoder_model.layers]
 
     encoded_l = encoder_model(left_input)
     encoded_r = encoder_model(right_input)
     encoded_c = context_encoder_model(context_input)
 
-    DNN = layers.Dense(100, activation="sigmoid")([encoded_l, encoded_r, encoded_c])
-    DNN = layers.Dense(100, activation="sigmoid")(DNN)
-    DNN = layers.Dense(100, activation="sigmoid")(DNN)
-    DNN = layers.Dense(10, activation="sigmoid")(DNN)
+    merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
+    DNN = layers.Dense(100, activation="relu")(merged)
+    DNN = layers.Dense(50, activation="relu")(DNN)
+    DNN = layers.Dense(50, activation="relu")(DNN)
+    # DNN = layers.Dense(10, activation="relu")(DNN)
 
     # Add a classifier
     outputs = layers.Dense(1, activation="sigmoid")(DNN)
@@ -101,8 +114,12 @@ def generate_siamese_model(x_train, x_test):
     siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
     siam_model.summary()
 
+    [print(i.shape, i.dtype) for i in siam_model.inputs]
+    [print(o.shape, o.dtype) for o in siam_model.outputs]
+    [print(l.name, l.input_shape, l.dtype) for l in siam_model.layers]
+
     # return the model
-    return siam_model
+    return siam_model, voc
 
 
 # Handle the input of data from test or train
@@ -128,7 +145,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
         words = np.array(expression.split(' '))
-        #print(words)
+        # print(words)
 
         listOfContextStrings.append(words)
         # allWords.extend(words)
@@ -158,11 +175,11 @@ def loadData(filepath, isTrain):
         listOfAnchorStrings.append(words)
 
     targets = keras.preprocessing.sequence.pad_sequences(np.array(listOfTargetStrings, dtype=object), maxlen=maxlen,
-                                                         dtype=object, value=' ')
+                                                         dtype=object, value='', truncating='post')
     anchors = keras.preprocessing.sequence.pad_sequences(np.array(listOfAnchorStrings, dtype=object), maxlen=maxlen,
-                                                         dtype=object, value=' ')
+                                                         dtype=object, value='', truncating='post')
     contexts = keras.preprocessing.sequence.pad_sequences(np.array(listOfContextStrings, dtype=object), maxlen=maxlen,
-                                                          dtype=object, value=' ')
+                                                          dtype=object, value='', truncating='post')
 
     # TODO make data have phrases as lits of strings, not a single string. This will add another dimention to the data.
     # data_len = len(targets)
@@ -190,18 +207,41 @@ def loadData(filepath, isTrain):
 
 
 def DNN_main(x_train, y_train, x_test, y_test):
-    print(len(x_train[0]), "Training sequences")
-    print(len(x_test), "Validation sequences")
-
     # DNN setup
 
-    print(x_train[:, 0])
+    model, voc = generate_siamese_model(x_train, x_test)
+    temp_x_train = np.empty_like(x_train, dtype=int)
+    temp_x_test = np.empty_like(x_test, dtype=int)
 
-    model = generate_siamese_model(x_train, x_train)
+    # TODO vectorize for speed
+    for i, col in enumerate(x_train):
+        for j, sample in enumerate(col):
+            for k, word in enumerate(sample):
+                try:
+                    temp_x_train[i, j, k] = voc.index(word)
+                except:
+                    temp_x_train[i, j, k] = 1
+
+    for i, col in enumerate(x_test):
+        for j, sample in enumerate(col):
+            for k, word in enumerate(sample):
+                try:
+                    temp_x_test[i, j, k] = voc.index(word)
+                except:
+                    temp_x_test[i, j, k] = 1
+
+    temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
+    temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
+    temp_x_train_c = tensorflow.convert_to_tensor(temp_x_train[2].tolist(), dtype='int32')
+    temp_y_train = tensorflow.convert_to_tensor(y_train[:, 0].tolist(), dtype="float32")
+    temp_x_test_t = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
+    temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[1].tolist(), dtype='int32')
+    temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
+    temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
 
     model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-    model.fit(x_train, y_train, batch_size=32, epochs=2,
-              validation_data=(x_test, y_test))
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=32, epochs=2,
+              validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
 
 
 if __name__ == "__main__":
@@ -219,17 +259,35 @@ if __name__ == "__main__":
     validation_n = int(n * 0.2)
     potential_indices = np.arange(n)
     validation_indices = []
+    train_X_rm = np.empty((3, (n - validation_n), 20), dtype=object)
+    train_Y_rm = np.empty(((n - validation_n), 1), dtype=object)
+    valid_X = np.empty((3, validation_n, 20), dtype=object)
+    valid_Y = np.empty((validation_n, 1), dtype=object)
     np.random.shuffle(potential_indices)
-    for index, potential in enumerate(potential_indices):
-        if index % 5 != 0:
-            #delete everything but every 5th - keep the 5th
-            validation_indices.append(potential)
-    # validation_indices = np.random.shuffle(validation_n)
-    train_X_rm = np.delete(train_X, potential_indices, axis=1)  # TODO fix this, output is 1D
-    train_Y_rm = np.delete(train_Y, potential_indices, axis=0)
+    temp = np.array(train_X)
 
-    valid_X = train_X[:][potential_indices]  # there is no Y data (no score) for test data in this set
-    valid_Y = train_Y[potential_indices]  #
+    valid_i = 0
+    train_i = 0
+
+    for index, potential in enumerate(potential_indices):
+        # print(potential)
+        potential_val = temp[:, potential, :]
+        if index % 5 == 4:
+            # delete everything but every 5th - keep the 5th
+            valid_X[:, valid_i] = (potential_val)
+            valid_Y[valid_i] = (train_Y[potential])
+            valid_i += 1
+        else:
+            train_X_rm[:, train_i] = (potential_val)
+            train_Y_rm[train_i] = (train_Y[potential])
+            train_i += 1
+
+    # validation_indices = np.random.shuffle(validation_n)
+    # train_X_rm = np.delete(train_X, potential_indices, axis=1)  # TODO fix this, output is 1D
+    # train_Y_rm = np.delete(train_Y, potential_indices, axis=0)
+
+    # valid_X = train_X[:][potential_indices]  # there is no Y data (no score) for test data in this set
+    # valid_Y = train_Y[potential_indices]  #
     # Shallow Model
 
     # Shallow keras
