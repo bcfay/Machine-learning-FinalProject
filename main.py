@@ -128,7 +128,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
         words = np.array(expression.split(' '))
-        print(words)
+        #print(words)
 
         listOfContextStrings.append(words)
         # allWords.extend(words)
@@ -217,14 +217,19 @@ if __name__ == "__main__":
     n = train_X.shape[1]
     # print("Sample size is: ", n)
     validation_n = int(n * 0.2)
-    validation_indices = np.arange(validation_n)
-    np.random.shuffle(validation_indices)
+    potential_indices = np.arange(n)
+    validation_indices = []
+    np.random.shuffle(potential_indices)
+    for index, potential in enumerate(potential_indices):
+        if index % 5 != 0:
+            #delete everything but every 5th - keep the 5th
+            validation_indices.append(potential)
     # validation_indices = np.random.shuffle(validation_n)
-    train_X_rm = np.delete(train_X, validation_indices, axis=1)  # TODO fix this, output is 1D
-    train_Y_rm = np.delete(train_Y, validation_indices, axis=0)
+    train_X_rm = np.delete(train_X, potential_indices, axis=1)  # TODO fix this, output is 1D
+    train_Y_rm = np.delete(train_Y, potential_indices, axis=0)
 
-    valid_X = train_X[:][validation_indices]  # there is no Y data (no score) for test data in this set
-    valid_Y = train_Y[validation_indices]  #
+    valid_X = train_X[:][potential_indices]  # there is no Y data (no score) for test data in this set
+    valid_Y = train_Y[potential_indices]  #
     # Shallow Model
 
     # Shallow keras
