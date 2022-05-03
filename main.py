@@ -12,10 +12,11 @@ from keras import layers
 from keras.layers import TextVectorization
 from keras.layers import Embedding
 from keras.preprocessing.text import Tokenizer
+
 word_vec_options = [50, 100, 200, 300]
 
 
-def generate_siamese_model(x_train, y_train, x_test, y_test):
+def generate_siamese_model(x_train, x_test):
     # Define the tensors for the two input images
     left_input = keras.Input(shape=(None,))
     right_input = keras.Input(shape=(None,))
@@ -24,7 +25,8 @@ def generate_siamese_model(x_train, y_train, x_test, y_test):
 
     # ---------- glove embedding ----------
     vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=word_vec_len)
-    text_ds = tensorflow.data.Dataset.from_tensor_slices(x_train[:, 1]).batch(128)# TODO see if we can get the words from the other datasets in here
+    text_ds = tensorflow.data.Dataset.from_tensor_slices(x_train[:, 0]).batch(
+        128)  # TODO see if we can get the words from the other datasets in here
     vectorizer.adapt(text_ds)
 
     voc = vectorizer.get_vocabulary()
@@ -98,14 +100,26 @@ def loadData(filepath, isTrain):
     df = pd.read_csv(filepath)
     # process
     wordmap = pd.read_csv("final_proj_CPCmap.csv")
-    for index, row in wordmap.iterrows():   #iterate the wordmap, replace any matches
+    for index, row in wordmap.iterrows():  # iterate the wordmap, replace any matches
         code = row[0]
         val = row[1]
         df.replace(to_replace=code, value=val, inplace=True)
 
-    targets = np.atleast_2d(np.array(df["target"])).T
+    targets =  np.atleast_2d(np.array(df["target"])).T
     anchors = np.atleast_2d(np.array(df["anchor"])).T
     contexts = np.atleast_2d(np.array(df["context"])).T
+
+    # TODO make data have phrases as lits of strings, not a single string. This will add another dimention to the data.
+    # data_len = len(targets)
+    #
+    # split_targets =  np.atleast_2d(np.empty(data_len))
+    # split_anchors =  np.atleast_2d(np.empty(data_len))
+    # split_contexts =  np.atleast_2d(np.empty(data_len))
+    #
+    # for i in range(data_len):
+    #     split_targets[i] = np.char.split(targets[i][0])
+    #     split_anchors[i] = np.char.split(anchors[i][0])
+    #     split_contexts[i] = np.char.split(contexts[i][0])
     # return a numpy array
     nparr = np.hstack((anchors, targets, contexts))
 
@@ -131,15 +145,18 @@ def DNN_main(x_train, y_train, x_test, y_test):
     # DNN setup
     maxlen = 10  # Only consider the first 200 words of each movie review
 
-    x_train[0] = keras.preprocessing.sequence.pad_sequences(x_train[0], maxlen=maxlen)
-    x_train[1] = keras.preprocessing.sequence.pad_sequences(x_train[1], maxlen=maxlen)
-    x_test[0] = keras.preprocessing.sequence.pad_sequences(x_test[0], maxlen=maxlen)
-    x_test[1] = keras.preprocessing.sequence.pad_sequences(x_test[1], maxlen=maxlen)
+    print(x_train[:, 0])
 
-    model = generate_siamese_model(x_train, y_train, x_test, y_test)
+    x_train[:, 0] = keras.preprocessing.sequence.pad_sequences(x_train[:, 0], maxlen=maxlen)
+    x_train[:, 1] = keras.preprocessing.sequence.pad_sequences(x_train[:, 1], maxlen=maxlen)
+    x_test[:, 0] = keras.preprocessing.sequence.pad_sequences(x_test[:, 0], maxlen=maxlen)
+    x_test[:, 1] = keras.preprocessing.sequence.pad_sequences(x_test[:, 1], maxlen=maxlen)
+
+    model = generate_siamese_model(x_train, x_train)
 
     model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-    model.fit([x_train[0], x_train[1]], y_train, batch_size=32, epochs=2, validation_data=([x_train[0], x_train[1]], y_test))
+    model.fit([x_train[:, 0], x_train[:, 1]], y_train, batch_size=32, epochs=2,
+              validation_data=([x_train[:, 0], x_train[:, 1]], y_test))
 
 
 if __name__ == "__main__":
@@ -158,8 +175,8 @@ if __name__ == "__main__":
     validation_indices = np.arange(validation_n)
     np.random.shuffle(validation_indices)
     # validation_indices = np.random.shuffle(validation_n)
-    train_X_rm = np.delete(train_X, validation_indices)#TODO fix this, output is 1D
-    train_Y_rm = np.delete(train_Y, validation_indices)
+    train_X_rm = np.delete(train_X, validation_indices, axis=0)  # TODO fix this, output is 1D
+    train_Y_rm = np.delete(train_Y, validation_indices, axis=0)
 
     test_X = train_X[validation_indices]  # there is no Y data (no score) for test data in this set
     test_Y = train_Y[validation_indices]  #
@@ -168,5 +185,5 @@ if __name__ == "__main__":
     # Shallow keras
 
     # Main Keras (Deep)
-    DNN_main(train_X_rm, train_Y_rm  , test_X, test_Y)
+    DNN_main(train_X_rm, train_Y_rm, test_X, test_Y)
     # Output what we need for the submission
