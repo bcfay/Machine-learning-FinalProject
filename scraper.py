@@ -8,6 +8,7 @@ from selenium.webdriver.common.keys import Keys
 import pandas as pd
 
 def scrape(letter):
+    print("Now Scraping for ", letter)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
     link = "https://worldwide.espacenet.com/classification?locale=en_EP#!/CPC=" + letter
     print(link)
@@ -27,22 +28,35 @@ def scrape(letter):
     for element in titles:
         print(element.text)
     '''
+    labels = ['code', 'strings']
+    output_data = []
+    df = pd.DataFrame(output_data, columns=labels)
+    # df.to_csv('HW3.csv')
     sections = driver.find_elements(by=By.CSS_SELECTOR, value='div.classitem.clearfix.level-4.has-children')
     for each_section in sections:
         #children = each_section.find_elements(by=By.CSS_SELECTOR, value='./child::*')
         classes = each_section.find_elements(by=By.CSS_SELECTOR, value='a.symbol.classref')
         titles = each_section.find_elements(by=By.CSS_SELECTOR, value='span.raw-text')
-        for a_class in classes:
-            print(a_class.text)
+        titlesList = []
         for title in titles:
-            print(title.text)
+            titlesList.append(title.text)
+        print(classes[0].text, ": ", titlesList)
+        df = pd.DataFrame([[classes[0].text, titlesList]])
+        df.to_csv("final_proj_CPCmap.csv", mode='a', header=False, index=False)
+        #for a_class in classes:
+        #    print(a_class.text)
+
 
         # children should be the context code, its text, etc
         #for child in children:
         #    print(child.getTagName())
 
 if __name__ == "__main__":
-    scrape('B')
+    alphabet = ["A","B","C","D","E","F","G","H","Y"]    #not every letter has CPC codes.
+    scrape("C")
+    #for letter in alphabet:
+    #    scrape(letter)
+    #    print("Scraping for ", letter)
 
 
 

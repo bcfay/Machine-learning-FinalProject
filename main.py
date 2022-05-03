@@ -96,8 +96,13 @@ def generate_siamese_model(x_train, y_train, x_test, y_test):
 def loadData(filepath, isTrain):
     # ingest a CSV
     df = pd.read_csv(filepath)
-
     # process
+    wordmap = pd.read_csv("final_proj_CPCmap.csv")
+    for index, row in wordmap.iterrows():   #iterate the wordmap, replace any matches
+        code = row[0]
+        val = row[1]
+        df.replace(to_replace=code, value=val, inplace=True)
+
     targets = np.atleast_2d(np.array(df["target"])).T
     anchors = np.atleast_2d(np.array(df["anchor"])).T
     contexts = np.atleast_2d(np.array(df["context"])).T
