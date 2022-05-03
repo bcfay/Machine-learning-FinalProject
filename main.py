@@ -16,6 +16,20 @@ from keras.preprocessing.text import Tokenizer
 word_vec_options = [50, 100, 200, 300]
 maxlen = 5  # pad length
 
+def euclidean_distance(vects):
+    """Find the Euclidean distance between two vectors.
+
+    Arguments:
+        vects: List containing two tensors of same length.
+
+    Returns:
+        Tensor containing euclidean distance
+        (as floating point value) between vectors.
+    """
+
+    x, y = vects
+    sum_square = tensorflow.math.reduce_sum(tensorflow.math.square(x - y), axis=1, keepdims=True)
+    return tensorflow.math.sqrt(tensorflow.math.maximum(sum_square, tensorflow.keras.backend.epsilon()))
 
 def generate_siamese_model(x_train, x_test):
     # Define the tensors for the two input images
@@ -111,7 +125,9 @@ def generate_siamese_model(x_train, x_test):
     encoded_r = encoder_model(right_input)
     encoded_c = context_encoder_model(context_input)
 
-    merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
+    merge_layer = layers.Lambda(euclidean_distance)([encoded_l, encoded_r])
+
+    merged = keras.layers.Concatenate(axis=1)([merge_layer, encoded_c])
     dropout_rate = .01
     DNN = layers.Dense(200, activation="tanh")(merged)
     DNN = layers.Dropout(dropout_rate, input_shape=(100,))(DNN)
@@ -163,7 +179,8 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
-        expression = expression.replace(' - ', '-')
+        expression = expression.replace('-', ' ')
+        expression = expression.replace(' - ', ' ')
         expression = expression.lower()
         words = np.array(expression.split(' '))
         # print(words)
@@ -179,7 +196,8 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
-        expression = expression.replace(' - ', '-')
+        expression = expression.replace('-', ' ')
+        expression = expression.replace(' - ', ' ')
         expression = expression.lower()
         words = np.array(expression.split(' '))
         # print(words)
@@ -192,7 +210,8 @@ def loadData(filepath, isTrain):
         expression = expression.replace("]", '')
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
-        expression = expression.replace(' - ', '-')
+        expression = expression.replace(' - ', ' ')
+        expression = expression.replace('-', ' ')
         expression = expression.replace(',', '')
         expression = expression.lower()
         words = np.array(expression.split(' '))
@@ -269,33 +288,54 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
     print("Compiling.")
-    model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_accuracy"])
+    model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_crossentropy", "mean_squared_error"])
     print("Fiting.")
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=2,
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=500,
               validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
     print("Predicting.")
     pred = model.predict([temp_x_test_t, temp_x_test_a, temp_x_test_c])
-    worst_num = 5
-    worst_delta = [pred[:worst_num, 0] - y_test[:worst_num, 0]]
+    worst_num = 10
+    worst_preds = np.zeros(worst_num)
+    worst_truths = np.zeros(worst_num)
+    worst_delta = np.zeros(worst_num)
     worst_data = x_test[:, :worst_num]
     for i in range(y_test.shape[0]):
         delta = pred[i, 0] - y_test[i, 0]
+        entered = False
+        for j in range(worst_num):
+            if (delta > worst_delta[j]) and not entered:
+                worst_delta[j] = delta
+                worst_preds[j] = pred[i, 0]
+                worst_truths[j] = y_test[i, 0]
+                worst_data[:, j] = x_test[:, i]
+                entered = True
 
-        for i in range(worst_num):
-            if (delta > worst_delta[i]):
-                worst_delta[i] = delta
-                print("prediction:", pred[i][0], "truth:", y_test[i][0], "delta:", delta)
-                print("anchor data:", x_test[0, i], "target:", x_test[1, i], "context:", x_test[2, i])
-                print(worst_data[:, i])
-                print(x_test[:, i])
-                worst_data[:, i] = x_test[:, i]
+    print("Overall worst preds:", worst_preds, "Overall worst truths:", worst_truths, "Overall worst deltas:",
+          worst_delta)
+    print("anchor data:", worst_data[0, :])
+    print("target data:", worst_data[1, :])
+    print("context data:", worst_data[2, :])
 
-    print("Worst deltas:", delta)
-    print("anchor data:", worst_data[0, :], "target:", worst_data[1, :], "context:", worst_data[2, :])
+    first_num = 10
+    first_preds = np.zeros(first_num)
+    first_truths = np.zeros(first_num)
+    first_delta = np.zeros(first_num)
+    first_data = x_test[:, :first_num]
 
-    print(worst_delta)
-    print(worst_data)
-    model.save('my_model')
+    for i in range(first_num):
+        first_delta[i] = delta
+        first_preds[i] = pred[i, 0]
+        first_truths[i] = y_test[i, 0]
+        first_data[:, i] = x_test[:, i]
+        entered = True
+
+    print("First validation data preds:", first_preds, "First truths:", worst_truths, "First deltas:",
+          worst_delta)
+    print("First anchor data:", first_data[0, :])
+    print("First target data:", first_data[1, :])
+    print("First context data:", first_data[2, :])
+
+    # model.save('my_model')
     return model
 
 
