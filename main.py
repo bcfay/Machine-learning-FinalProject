@@ -14,19 +14,20 @@ from keras.layers import Embedding
 from keras.preprocessing.text import Tokenizer
 
 word_vec_options = [50, 100, 200, 300]
+maxlen = 20  # pad length
 
 
 def generate_siamese_model(x_train, x_test):
     # Define the tensors for the two input images
-    left_input = keras.Input(shape=(None, 10, 300))
-    right_input = keras.Input(shape=(None, 10, 300))
-    context_input = keras.Input(shape=(None, 10, 300))
+    left_input = keras.Input(shape=(None, maxlen, 300))
+    right_input = keras.Input(shape=(None, maxlen, 300))
+    context_input = keras.Input(shape=(None, maxlen, 300))
     max_features = 20000  # Only consider the top 20k words
     word_vec_len = word_vec_options[3]
 
     # ---------- glove embedding ----------
     vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=word_vec_len)
-    text_ds = tensorflow.data.Dataset.from_tensor_slices(np.hstack( (x_train[:, 0:1], x_test[:, 0:1])) ).batch(
+    text_ds = tensorflow.data.Dataset.from_tensor_slices(np.hstack((x_train[:, 0:1], x_test[:, 0:1]))).batch(
         128)  # TODO see if we can get the words from the other datasets in here
     vectorizer.adapt(text_ds)
 
@@ -79,8 +80,8 @@ def generate_siamese_model(x_train, x_test):
 
     context_encoder_model = keras.Sequential()
     context_encoder_model.add(Embedding(num_tokens, word_vec_len,
-                                embeddings_initializer=keras.initializers.Constant(embedding_matrix),
-                                trainable=False, ))
+                                        embeddings_initializer=keras.initializers.Constant(embedding_matrix),
+                                        trainable=False, ))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(64)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
@@ -114,7 +115,7 @@ def loadData(filepath, isTrain):
         code = row[0]
         val = row[1]
         if code == "B01" or code == "B01,":
-            manualList = ['PHYSICAL', 'OR', 'CHEMICAL', 'PROCESSES', 'OR','APPARATUS', 'IN', 'GENERAL']
+            manualList = ['PHYSICAL', 'OR', 'CHEMICAL', 'PROCESSES', 'OR', 'APPARATUS', 'IN', 'GENERAL']
             df.replace(to_replace=code, value=manualList, inplace=True)
             pass
         df.replace(to_replace=code, value=val, inplace=True)
@@ -125,12 +126,12 @@ def loadData(filepath, isTrain):
         expression = expression.replace("]", '')
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
-        expression =  expression.replace(',', '')
+        expression = expression.replace(',', '')
         words = np.array(expression.split(' '))
         print(words)
 
         listOfContextStrings.append(words)
-        #allWords.extend(words)
+        # allWords.extend(words)
 
     raw_targets = df["target"]
     listOfTargetStrings = []
@@ -139,9 +140,9 @@ def loadData(filepath, isTrain):
         expression = expression.replace("]", '')
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
-        expression =  expression.replace(',', '')
+        expression = expression.replace(',', '')
         words = np.array(expression.split(' '))
-        #print(words)
+        # print(words)
         listOfTargetStrings.append(words)
 
     raw_anchors = df["anchor"]
@@ -156,9 +157,12 @@ def loadData(filepath, isTrain):
         # print(words)
         listOfAnchorStrings.append(words)
 
-    targets =  np.atleast_2d(np.array(listOfTargetStrings)).T
-    anchors = np.atleast_2d(np.array(listOfAnchorStrings)).T
-    contexts = np.atleast_2d(np.array(listOfContextStrings)).T
+    targets = keras.preprocessing.sequence.pad_sequences(np.array(listOfTargetStrings, dtype=object), maxlen=maxlen,
+                                                         dtype=object, value=' ')
+    anchors = keras.preprocessing.sequence.pad_sequences(np.array(listOfAnchorStrings, dtype=object), maxlen=maxlen,
+                                                         dtype=object, value=' ')
+    contexts = keras.preprocessing.sequence.pad_sequences(np.array(listOfContextStrings, dtype=object), maxlen=maxlen,
+                                                          dtype=object, value=' ')
 
     # TODO make data have phrases as lits of strings, not a single string. This will add another dimention to the data.
     # data_len = len(targets)
@@ -172,43 +176,32 @@ def loadData(filepath, isTrain):
     #     split_anchors[i] = np.char.split(anchors[i][0])
     #     split_contexts[i] = np.char.split(contexts[i][0])
     # return a numpy array
-    nparr = np.hstack((anchors, targets, contexts))
 
     # stack a score column if isTrain (test data has no score)
     if isTrain:
         score = np.atleast_2d(np.array(df["score"])).T
         print(score.shape)
-        nparr = np.hstack((nparr, score))
+        nparr = (np.vstack(([anchors], [targets], [contexts])), score)
+    else:
+        nparr = np.vstack(([anchors], [targets], [contexts]))
     print(nparr)
 
-    # print (nparr)
-    print(nparr)
-
-    if isTrain:
-        pass
     return nparr
 
 
 def DNN_main(x_train, y_train, x_test, y_test):
-    print(len(x_train), "Training sequences")
+    print(len(x_train[0]), "Training sequences")
     print(len(x_test), "Validation sequences")
 
     # DNN setup
-    maxlen = 10  # Only consider the first 200 words of each movie review
 
     print(x_train[:, 0])
-
-    # TODO Uncomment and get padding working after data dimentionality is fixed
-    # x_train[:, 0] = keras.preprocessing.sequence.pad_sequences(x_train[:, 0], maxlen=maxlen)
-    # x_train[:, 1] = keras.preprocessing.sequence.pad_sequences(x_train[:, 1], maxlen=maxlen)
-    # x_test[:, 0] = keras.preprocessing.sequence.pad_sequences(x_test[:, 0], maxlen=maxlen)
-    # x_test[:, 1] = keras.preprocessing.sequence.pad_sequences(x_test[:, 1], maxlen=maxlen)
 
     model = generate_siamese_model(x_train, x_train)
 
     model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-    model.fit([x_train[:, 0], x_train[:, 1]], y_train, batch_size=32, epochs=2,
-              validation_data=([x_train[:, 0], x_train[:, 1]], y_test))
+    model.fit(x_train, y_train, batch_size=32, epochs=2,
+              validation_data=(x_test, y_test))
 
 
 if __name__ == "__main__":
@@ -217,8 +210,8 @@ if __name__ == "__main__":
     # labels = np.load("fashion_mnist_{}_labels.npy".format(which))
     train = loadData("train.csv", True)  # make sure this is inside the repo on your local - it's in the gitignore
     test = loadData("test.csv", False)  # make sure this is inside the repo on your local - it's in the gitignore
-    train_X = train[:, :-1]
-    train_Y = train[:, -1]
+    train_X = train[0]
+    train_Y = train[1]
     print("Y shape is: ", train_Y.shape)
     # ^ Before Validation
     n = train_X.shape[0]
@@ -230,12 +223,12 @@ if __name__ == "__main__":
     train_X_rm = np.delete(train_X, validation_indices, axis=0)  # TODO fix this, output is 1D
     train_Y_rm = np.delete(train_Y, validation_indices, axis=0)
 
-    test_X = train_X[validation_indices]  # there is no Y data (no score) for test data in this set
-    test_Y = train_Y[validation_indices]  #
+    valid_X = train_X[:][validation_indices]  # there is no Y data (no score) for test data in this set
+    valid_Y = train_Y[validation_indices]  #
     # Shallow Model
 
     # Shallow keras
 
     # Main Keras (Deep)
-    DNN_main(train_X_rm, train_Y_rm, test_X, test_Y)
+    DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
     # Output what we need for the submission
