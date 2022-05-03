@@ -18,14 +18,15 @@ word_vec_options = [50, 100, 200, 300]
 
 def generate_siamese_model(x_train, x_test):
     # Define the tensors for the two input images
-    left_input = keras.Input(shape=(None,))
-    right_input = keras.Input(shape=(None,))
+    left_input = keras.Input(shape=(None, 10, 300))
+    right_input = keras.Input(shape=(None, 10, 300))
+    context_input = keras.Input(shape=(None, 10, 300))
     max_features = 20000  # Only consider the top 20k words
     word_vec_len = word_vec_options[3]
 
     # ---------- glove embedding ----------
     vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=word_vec_len)
-    text_ds = tensorflow.data.Dataset.from_tensor_slices(x_train[:, 0]).batch(
+    text_ds = tensorflow.data.Dataset.from_tensor_slices(np.hstack( (x_train[:, 0:1], x_test[:, 0:1])) ).batch(
         128)  # TODO see if we can get the words from the other datasets in here
     vectorizer.adapt(text_ds)
 
@@ -76,18 +77,27 @@ def generate_siamese_model(x_train, x_test):
     encoder_model.add(layers.Bidirectional(layers.LSTM(64)))
     encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
 
+    context_encoder_model = keras.Sequential()
+    context_encoder_model.add(Embedding(num_tokens, word_vec_len,
+                                embeddings_initializer=keras.initializers.Constant(embedding_matrix),
+                                trainable=False, ))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(64)))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
+
     encoded_l = encoder_model(left_input)
     encoded_r = encoder_model(right_input)
+    encoded_c = context_encoder_model(context_input)
 
-    DNN = layers.Dense(50, activation="sigmoid")([encoded_l, encoded_r])
-    DNN = layers.Dense(50, activation="sigmoid")(DNN)
-    DNN = layers.Dense(50, activation="sigmoid")(DNN)
+    DNN = layers.Dense(100, activation="sigmoid")([encoded_l, encoded_r, encoded_c])
+    DNN = layers.Dense(100, activation="sigmoid")(DNN)
+    DNN = layers.Dense(100, activation="sigmoid")(DNN)
     DNN = layers.Dense(10, activation="sigmoid")(DNN)
 
     # Add a classifier
     outputs = layers.Dense(1, activation="sigmoid")(DNN)
 
-    siam_model = keras.Model(inputs=[left_input, right_input], outputs=outputs)
+    siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
     siam_model.summary()
 
     # return the model
@@ -165,10 +175,11 @@ def DNN_main(x_train, y_train, x_test, y_test):
 
     print(x_train[:, 0])
 
-    x_train[:, 0] = keras.preprocessing.sequence.pad_sequences(x_train[:, 0], maxlen=maxlen)
-    x_train[:, 1] = keras.preprocessing.sequence.pad_sequences(x_train[:, 1], maxlen=maxlen)
-    x_test[:, 0] = keras.preprocessing.sequence.pad_sequences(x_test[:, 0], maxlen=maxlen)
-    x_test[:, 1] = keras.preprocessing.sequence.pad_sequences(x_test[:, 1], maxlen=maxlen)
+    # TODO Uncomment and get padding working after data dimentionality is fixed
+    # x_train[:, 0] = keras.preprocessing.sequence.pad_sequences(x_train[:, 0], maxlen=maxlen)
+    # x_train[:, 1] = keras.preprocessing.sequence.pad_sequences(x_train[:, 1], maxlen=maxlen)
+    # x_test[:, 0] = keras.preprocessing.sequence.pad_sequences(x_test[:, 0], maxlen=maxlen)
+    # x_test[:, 1] = keras.preprocessing.sequence.pad_sequences(x_test[:, 1], maxlen=maxlen)
 
     model = generate_siamese_model(x_train, x_train)
 
