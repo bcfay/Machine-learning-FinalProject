@@ -104,7 +104,7 @@ def generate_siamese_model(x_train, x_test):
 
     merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
     DNN = layers.Dense(50, activation="tanh")(merged)
-    DNN = layers.Dropout(.2,input_shape=(20,) activation="tanh")(merged)
+    DNN = layers.Dropout(.2,input_shape=(20,), activation="tanh")(merged)
     # DNN = layers.Dense(100, activation="relu")(DNN)
     # DNN = layers.Dense(50, activation="relu")(DNN)
     DNN = layers.Dense(10, activation="relu")(DNN)
