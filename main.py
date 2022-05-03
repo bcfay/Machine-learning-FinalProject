@@ -114,8 +114,8 @@ def loadData(filepath, isTrain):
         code = row[0]
         val = row[1]
         if code == "B01" or code == "B01,":
-        #    manualList = ['PHYSICAL', 'OR', 'CHEMICAL', 'PROCESSES', 'OR','APPARATUS', 'IN', 'GENERAL']
-        #    df.replace(to_replace=code, value=manualList, inplace=True)
+            manualList = ['PHYSICAL', 'OR', 'CHEMICAL', 'PROCESSES', 'OR','APPARATUS', 'IN', 'GENERAL']
+            df.replace(to_replace=code, value=manualList, inplace=True)
             pass
         df.replace(to_replace=code, value=val, inplace=True)
     rawContexts = df["context"]
@@ -126,15 +126,38 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\'', '')
         expression = expression.replace('\"', '')
         expression =  expression.replace(',', '')
-        words = expression.split(' ')
+        words = np.array(expression.split(' '))
         print(words)
 
         listOfContextStrings.append(words)
         #allWords.extend(words)
 
+    raw_targets = df["target"]
+    listOfTargetStrings = []
+    for index, expression in enumerate(raw_targets):
+        expression = expression.replace("[", '')
+        expression = expression.replace("]", '')
+        expression = expression.replace('\'', '')
+        expression = expression.replace('\"', '')
+        expression =  expression.replace(',', '')
+        words = np.array(expression.split(' '))
+        #print(words)
+        listOfTargetStrings.append(words)
 
-    targets =  np.atleast_2d(np.array(df["target"])).T
-    anchors = np.atleast_2d(np.array(df["anchor"])).T
+    raw_anchors = df["target"]
+    listOfAnchorStrings = []
+    for index, expression in enumerate(raw_anchors):
+        expression = expression.replace("[", '')
+        expression = expression.replace("]", '')
+        expression = expression.replace('\'', '')
+        expression = expression.replace('\"', '')
+        expression = expression.replace(',', '')
+        words = np.array(expression.split(' '))
+        # print(words)
+        listOfAnchorStrings.append(words)
+
+    targets =  np.atleast_2d(np.array(listOfTargetStrings)).T
+    anchors = np.atleast_2d(np.array(listOfAnchorStrings)).T
     contexts = np.atleast_2d(np.array(listOfContextStrings)).T
 
     # TODO make data have phrases as lits of strings, not a single string. This will add another dimention to the data.
