@@ -14,7 +14,7 @@ from keras.layers import Embedding
 from keras.preprocessing.text import Tokenizer
 
 word_vec_options = [50, 100, 200, 300]
-maxlen = 20  # pad length
+maxlen = 5  # pad length
 
 
 def generate_siamese_model(x_train, x_test):
@@ -74,16 +74,16 @@ def generate_siamese_model(x_train, x_test):
                                 embeddings_initializer=keras.initializers.Constant(embedding_matrix),
                                 trainable=False))
     # Add bidirectional LSTMs w/ decreasing dimentionality
+    encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
     encoder_model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
-    # encoder_model.add(layers.Bidirectional(layers.LSTM(32, return_sequences=True)))
     encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
 
     context_encoder_model = keras.Sequential()
     context_encoder_model.add(Embedding(num_tokens, word_vec_len,
                                         embeddings_initializer=keras.initializers.Constant(embedding_matrix),
                                         trainable=False))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
-    # context_encoder_model.add(layers.Bidirectional(layers.LSTM(32, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(32)))
 
     encoder_model.summary()
@@ -103,10 +103,10 @@ def generate_siamese_model(x_train, x_test):
     encoded_c = context_encoder_model(context_input)
 
     merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
-    DNN = layers.Dense(100, activation="relu")(merged)
-    DNN = layers.Dense(50, activation="relu")(DNN)
-    DNN = layers.Dense(50, activation="relu")(DNN)
-    # DNN = layers.Dense(10, activation="relu")(DNN)
+    DNN = layers.Dense(50, activation="tanh")(merged)
+    # DNN = layers.Dense(100, activation="relu")(DNN)
+    # DNN = layers.Dense(50, activation="relu")(DNN)
+    DNN = layers.Dense(10, activation="relu")(DNN)
 
     # Add a classifier
     outputs = layers.Dense(1, activation="sigmoid")(DNN)
@@ -121,7 +121,7 @@ def generate_siamese_model(x_train, x_test):
     # return the model
     return siam_model, voc
 
-
+# TODO make words separated by dashes a single word. They count as one in GLOVE but end up as 3 differnet words in our data
 # Handle the input of data from test or train
 def loadData(filepath, isTrain):
     # ingest a CSV
@@ -208,6 +208,8 @@ def loadData(filepath, isTrain):
 
 def DNN_main(x_train, y_train, x_test, y_test):
     # DNN setup
+    print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
+
 
     model, voc = generate_siamese_model(x_train, x_test)
     temp_x_train = np.empty_like(x_train, dtype=int)
@@ -239,8 +241,8 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
 
-    model.compile("adam", "binary_crossentropy", metrics=["accuracy"])
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=32, epochs=2,
+    model.compile("adam", "mean_squared_error", metrics=["accuracy"])
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=128, epochs=50,
               validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
 
 
@@ -259,9 +261,9 @@ if __name__ == "__main__":
     validation_n = int(n * 0.2)
     potential_indices = np.arange(n)
     validation_indices = []
-    train_X_rm = np.empty((3, (n - validation_n), 20), dtype=object)
+    train_X_rm = np.empty((3, (n - validation_n), maxlen), dtype=object)
     train_Y_rm = np.empty(((n - validation_n), 1), dtype=object)
-    valid_X = np.empty((3, validation_n, 20), dtype=object)
+    valid_X = np.empty((3, validation_n, maxlen), dtype=object)
     valid_Y = np.empty((validation_n, 1), dtype=object)
     np.random.shuffle(potential_indices)
     temp = np.array(train_X)
