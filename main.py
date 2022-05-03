@@ -214,13 +214,13 @@ if __name__ == "__main__":
     train_Y = train[1]
     print("Y shape is: ", train_Y.shape)
     # ^ Before Validation
-    n = train_X.shape[0]
+    n = train_X.shape[1]
     # print("Sample size is: ", n)
     validation_n = int(n * 0.2)
     validation_indices = np.arange(validation_n)
     np.random.shuffle(validation_indices)
     # validation_indices = np.random.shuffle(validation_n)
-    train_X_rm = np.delete(train_X, validation_indices, axis=0)  # TODO fix this, output is 1D
+    train_X_rm = np.delete(train_X, validation_indices, axis=1)  # TODO fix this, output is 1D
     train_Y_rm = np.delete(train_Y, validation_indices, axis=0)
 
     valid_X = train_X[:][validation_indices]  # there is no Y data (no score) for test data in this set
