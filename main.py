@@ -30,7 +30,7 @@ def generate_siamese_model(x_train, x_test):
     hbug = np.hstack((x_train[0:3], x_test[0:3])).flatten().tolist()
     lean_bug = []
     for i, word in enumerate(hbug):
-        if(word == ''):
+        if (word == ''):
             pass
         else:
             lean_bug.append(word)
@@ -114,20 +114,19 @@ def generate_siamese_model(x_train, x_test):
     merged = keras.layers.Concatenate(axis=1)([encoded_l, encoded_r, encoded_c])
     dropout_rate = .01
     DNN = layers.Dense(200, activation="tanh")(merged)
-    DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
+    DNN = layers.Dropout(dropout_rate, input_shape=(100,))(DNN)
     DNN = layers.Dense(200, activation="tanh")(DNN)
-    DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
+    DNN = layers.Dropout(dropout_rate, input_shape=(100,))(DNN)
     DNN = layers.Dense(50, activation="tanh")(DNN)
-    DNN = layers.Dropout(dropout_rate,input_shape=(50,))(DNN)
+    DNN = layers.Dropout(dropout_rate, input_shape=(50,))(DNN)
     DNN = layers.Dense(30, activation="tanh")(DNN)
-    DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
+    DNN = layers.Dropout(dropout_rate, input_shape=(30,))(DNN)
     DNN = layers.Dense(30, activation="tanh")(DNN)
-    DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
+    DNN = layers.Dropout(dropout_rate, input_shape=(30,))(DNN)
 
     # Add a classifier
     outputs = layers.Dense(1, activation="sigmoid")(DNN)
     # outputs = tensorflow.round(outputs)
-
 
     siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
     siam_model.summary()
@@ -138,6 +137,7 @@ def generate_siamese_model(x_train, x_test):
 
     # return the model
     return siam_model, voc
+
 
 # TODO make words separated by dashes a single word. They count as one in GLOVE but end up as 3 differnet words in our data
 # Handle the input of data from test or train
@@ -156,7 +156,7 @@ def loadData(filepath, isTrain):
         df.replace(to_replace=code, value=val, inplace=True)
     rawContexts = df["context"]
     listOfContextStrings = []
-    #TODO make this a helper function
+    # TODO make this a helper function
     for index, expression in enumerate(rawContexts):
         expression = expression.replace("[", '')
         expression = expression.replace("]", '')
@@ -235,7 +235,7 @@ def DNN_main(x_train, y_train, x_test, y_test):
     # DNN setup
     print("x_train:\n", x_train)
     print("y_train:\n", y_train)
-    print( "x_test:\n", x_test)
+    print("x_test:\n", x_test)
     print("x_train:\n", x_train, "y_train", y_train, "x_test", x_test, "y_test", y_test)
     print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
 
@@ -257,7 +257,8 @@ def DNN_main(x_train, y_train, x_test, y_test):
             for k, word in enumerate(sample):
                 try:
                     temp_x_test[i, j, k] = voc.index(word)
-                except:                    temp_x_test[i, j, k] = 1
+                except:
+                    temp_x_test[i, j, k] = 1
 
     temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
     temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
@@ -268,27 +269,26 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
     print("Compiling.")
-    model.compile("adam", "mean_squared_error", metrics=["accuracy","binary_accuracy"])
+    model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_accuracy"])
     print("Fiting.")
     model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=2,
               validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
     print("Predicting.")
     pred = model.predict([temp_x_test_t, temp_x_test_a, temp_x_test_c])
     worst_num = 5
-    worst = [[pred[:worst_num, 0] - y_test[:worst_num, 0]], [x_test[:worst_num, i]]]
+    worst = [pred[:worst_num, 0] - y_test[:worst_num, 0], x_test[:worst_num, i]]
     for i in range(y_test.shape[1]):
         delta = pred[i, 0] - y_test[i, 0]
         print("prediction:", pred[i][0], "truth:", y_test[i][0], "delta:", delta)
         print("anchor data:", x_test[0, i], "target:", x_test[1, i], "context:", x_test[2, i])
-        for i, worst_delta in enumerate(worst[0]):
-            if(delta > worst_delta):
-                worst[0, i] = delta
-                worst[1, i] = x_test[:, i]
+        for i in range(worst_num):
+            if (delta > worst[0][i]):
+                worst[0][i] = delta
+                worst[1][i] = x_test[:, i]
 
     print(worst)
     model.save('my_model')
     return model
-
 
 
 if __name__ == "__main__":
