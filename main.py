@@ -22,15 +22,23 @@ def generate_siamese_model(x_train, x_test):
     left_input = keras.Input(maxlen, dtype='int32')
     right_input = keras.Input(maxlen, dtype='int32')
     context_input = keras.Input(maxlen, dtype='int32')
-    max_features = 50000  # Only consider the top 20k words
+    max_features = 400000  # Only consider the top 20k words
     word_vec_len = word_vec_options[3]
 
     # ---------- glove embedding ----------
     vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=word_vec_len)
-    hbug = np.hstack((x_train[0:3], x_test[0:3])).flatten()
-    text_ds = tensorflow.data.Dataset.from_tensor_slices(hbug).batch(
-        128)  # TODO see if we can get the words from the other datasets in here
-    vectorizer.adapt(text_ds)
+    hbug = np.hstack((x_train[0:3], x_test[0:3])).flatten().tolist()
+    lean_bug = []
+    for i, word in enumerate(hbug):
+        if(word == ''):
+            pass
+        else:
+            lean_bug.append(word)
+
+    # text_ds = tensorflow.data.Dataset.from_tensor_slices(hbug).batch(
+    #     128)  # TODO see if we can get the words from the other datasets in here
+    print("Vectorizor adaption.")
+    vectorizer.adapt(lean_bug)
 
     voc = vectorizer.get_vocabulary()
     word_index = dict(zip(voc, range(len(voc))))
@@ -39,6 +47,7 @@ def generate_siamese_model(x_train, x_test):
     # get the glove library at http://nlp.stanford.edu/data/glove.6B.zip
     # its a pretty beefy file (abt 2gb fully extracted)
     # path_to_glove_file = os.path.join( os.path.expanduser("~"), "D:/random big files/Machine Learning/glove.6B.100d") #Beef path
+    print("Glove reading.")
     filepath = "glove.6B." + str(word_vec_len) + "d.txt"
     embeddings_index = {}
     f = open(filepath, encoding='utf-8')
@@ -108,11 +117,11 @@ def generate_siamese_model(x_train, x_test):
     DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
     DNN = layers.Dense(200, activation="tanh")(DNN)
     DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
-    DNN = layers.Dense(50, activation="relu")(DNN)
+    DNN = layers.Dense(50, activation="tanh")(DNN)
     DNN = layers.Dropout(dropout_rate,input_shape=(50,))(DNN)
-    DNN = layers.Dense(30, activation="relu")(DNN)
+    DNN = layers.Dense(30, activation="tanh")(DNN)
     DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
-    DNN = layers.Dense(30, activation="relu")(DNN)
+    DNN = layers.Dense(30, activation="tanh")(DNN)
     DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
 
     # Add a classifier
@@ -155,6 +164,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
         expression = expression.replace(' - ', '-')
+        expression = expression.lower()
         words = np.array(expression.split(' '))
         # print(words)
 
@@ -170,6 +180,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\"', '')
         expression = expression.replace(',', '')
         expression = expression.replace(' - ', '-')
+        expression = expression.lower()
         words = np.array(expression.split(' '))
         # print(words)
         listOfTargetStrings.append(words)
@@ -183,6 +194,7 @@ def loadData(filepath, isTrain):
         expression = expression.replace('\"', '')
         expression = expression.replace(' - ', '-')
         expression = expression.replace(',', '')
+        expression = expression.lower()
         words = np.array(expression.split(' '))
         # print(words)
         listOfAnchorStrings.append(words)
@@ -221,8 +233,11 @@ def loadData(filepath, isTrain):
 
 def DNN_main(x_train, y_train, x_test, y_test):
     # DNN setup
+    print("x_train:\n", x_train)
+    print("y_train:\n", y_train)
+    print( "x_test:\n", x_test)
+    print("x_train:\n", x_train, "y_train", y_train, "x_test", x_test, "y_test", y_test)
     print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
-    print("x_train", x_train, "y_train", y_train, "x_test", x_test, "y_test", y_test)
 
     model, voc = generate_siamese_model(x_train, x_test)
     temp_x_train = np.empty_like(x_train, dtype=int)
@@ -242,8 +257,7 @@ def DNN_main(x_train, y_train, x_test, y_test):
             for k, word in enumerate(sample):
                 try:
                     temp_x_test[i, j, k] = voc.index(word)
-                except:
-                    temp_x_test[i, j, k] = 1
+                except:                    temp_x_test[i, j, k] = 1
 
     temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
     temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
@@ -253,13 +267,25 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[1].tolist(), dtype='int32')
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
-
+    print("Compiling.")
     model.compile("adam", "mean_squared_error", metrics=["accuracy","binary_accuracy"])
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=256, epochs=50,
+    print("Fiting.")
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=2,
               validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
-    print(test)
-    print(model.pred(test))
-    print(model.pred([temp_x_test_t, temp_x_test_a, temp_x_test_c]))
+    print("Predicting.")
+    pred = model.predict([temp_x_test_t, temp_x_test_a, temp_x_test_c])
+    worst_num = 5
+    worst = [[pred[:worst_num, 0] - y_test[:worst_num, 0]], [x_test[:worst_num, i]]]
+    for i in range(y_test.shape[1]):
+        delta = pred[i, 0] - y_test[i, 0]
+        print("prediction:", pred[i][0], "truth:", y_test[i][0], "delta:", delta)
+        print("anchor data:", x_test[0, i], "target:", x_test[1, i], "context:", x_test[2, i])
+        for i, worst_delta in enumerate(worst[0]):
+            if(delta > worst_delta):
+                worst[0, i] = delta
+                worst[1, i] = x_test[:, i]
+
+    print(worst)
     model.save('my_model')
     return model
 
