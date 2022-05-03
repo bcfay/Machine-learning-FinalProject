@@ -103,11 +103,29 @@ def loadData(filepath, isTrain):
     for index, row in wordmap.iterrows():  # iterate the wordmap, replace any matches
         code = row[0]
         val = row[1]
+        if code == "B01" or code == "B01,":
+        #    manualList = ['PHYSICAL', 'OR', 'CHEMICAL', 'PROCESSES', 'OR','APPARATUS', 'IN', 'GENERAL']
+        #    df.replace(to_replace=code, value=manualList, inplace=True)
+            pass
         df.replace(to_replace=code, value=val, inplace=True)
+    rawContexts = df["context"]
+    listOfContextStrings = []
+    for index, expression in enumerate(rawContexts):
+        expression = expression.replace("[", '')
+        expression = expression.replace("]", '')
+        expression = expression.replace('\'', '')
+        expression = expression.replace('\"', '')
+        expression =  expression.replace(',', '')
+        words = expression.split(' ')
+        print(words)
+
+        listOfContextStrings.append(words)
+        #allWords.extend(words)
+
 
     targets =  np.atleast_2d(np.array(df["target"])).T
     anchors = np.atleast_2d(np.array(df["anchor"])).T
-    contexts = np.atleast_2d(np.array(df["context"])).T
+    contexts = np.atleast_2d(np.array(listOfContextStrings)).T
 
     # TODO make data have phrases as lits of strings, not a single string. This will add another dimention to the data.
     # data_len = len(targets)
