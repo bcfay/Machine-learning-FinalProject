@@ -589,16 +589,6 @@ if __name__ == "__main__":
             train_Y_rm[train_i] = (train_Y[potential])
             train_i += 1
 
-    # validation_indices = np.random.shuffle(validation_n)
-    # train_X_rm = np.delete(train_X, potential_indices, axis=1)  # TODO fix this, output is 1D
-    # train_Y_rm = np.delete(train_Y, potential_indices, axis=0)
-
-    # valid_X = train_X[:][potential_indices]  # there is no Y data (no score) for test data in this set
-    # valid_Y = train_Y[potential_indices]  #
-    # Shallow Model
-
-    # Shallow keras
-
     # Main Keras (Deep)
     # model = NN_3layer(train_X_rm, train_Y_rm, valid_X, valid_Y)
     model, voc = DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
