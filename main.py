@@ -593,9 +593,9 @@ if __name__ == "__main__":
     #
     temp_x_train, temp_x_test = function(train_X_rm, train_Y_rm, valid_X, valid_Y, voc)
     x = test
-    test_anchor = tensorflow.convert_to_tensor(x[0].tolist(), dtype='int32')
-    test_target = tensorflow.convert_to_tensor(x[1].tolist(), dtype='int32')
-    test_context = tensorflow.convert_to_tensor(x[2].tolist(), dtype='int32')
+    test_anchor = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
+    test_target = tensorflow.convert_to_tensor(temp_x_test[1].tolist(), dtype='int32')
+    test_context = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
 
     y = model.predict(([test_anchor, test_target, test_context]))
     df = pd.DataFrame({'id': x, 'score': y})
