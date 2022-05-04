@@ -278,6 +278,28 @@ def generate_siamese_model_shallow(x_train, x_test):
     # return the model
     return siam_model, voc
 
+def function(x_train, y_train, x_test, y_test, voc):
+    temp_x_train = np.empty_like(x_train, dtype=int)
+    temp_x_test = np.empty_like(x_test, dtype=int)
+
+    # this function vectorizes
+    for i, col in enumerate(x_train):
+        for j, sample in enumerate(col):
+            for k, word in enumerate(sample):
+                try:
+                    temp_x_train[i, j, k] = voc.index(word)
+                except:
+                    temp_x_train[i, j, k] = 1
+
+    for i, col in enumerate(x_test):
+        for j, sample in enumerate(col):
+            for k, word in enumerate(sample):
+                try:
+                    temp_x_test[i, j, k] = voc.index(word)
+                except:
+                    temp_x_test[i, j, k] = 1
+    return temp_x_train, temp_x_test
+
 
 # TODO make words separated by dashes a single word. They count as one in GLOVE but end up as 3 differnet words in our data
 # Handle the input of data from test or train
@@ -387,24 +409,25 @@ def NN_3layer(x_train, y_train, x_test, y_test):
     temp_x_test = np.empty_like(x_test, dtype=int)
 
     # TODO vectorize for speed
-    for i, col in enumerate(x_train):
-        for j, sample in enumerate(col):
-            for k, word in enumerate(sample):
-                try:
-                    temp_x_train[i, j, k] = voc.index(word)
-                except:
-                    temp_x_train[i, j, k] = 1
+    # for i, col in enumerate(x_train):
+    #     for j, sample in enumerate(col):
+    #         for k, word in enumerate(sample):
+    #             try:
+    #                 temp_x_train[i, j, k] = voc.index(word)
+    #             except:
+    #                 temp_x_train[i, j, k] = 1
+    #
+    # for i, col in enumerate(x_test):
+    #     for j, sample in enumerate(col):
+    #         for k, word in enumerate(sample):
+    #             try:
+    #                 temp_x_test[i, j, k] = voc.index(word)
+    #             except:
+    #                 temp_x_test[i, j, k] = 1
+    temp_x_train, temp_x_test = function(x_train, y_train, x_test, y_test, voc)
 
-    for i, col in enumerate(x_test):
-        for j, sample in enumerate(col):
-            for k, word in enumerate(sample):
-                try:
-                    temp_x_test[i, j, k] = voc.index(word)
-                except:
-                    temp_x_test[i, j, k] = 1
-
-    temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
-    temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
+    temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
+    temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
     temp_x_train_c = tensorflow.convert_to_tensor(temp_x_train[2].tolist(), dtype='int32')
     temp_y_train = tensorflow.convert_to_tensor(y_train[:, 0].tolist(), dtype="float32")
     temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
@@ -431,7 +454,7 @@ def NN_3layer(x_train, y_train, x_test, y_test):
 
     print(worst)
     model.save('my_model')
-    return model
+    return model, voc
 
 
 def DNN_main(x_train, y_train, x_test, y_test):
@@ -447,24 +470,24 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test = np.empty_like(x_test, dtype=int)
 
     # TODO vectorize for speed
-    for i, col in enumerate(x_train):
-        for j, sample in enumerate(col):
-            for k, word in enumerate(sample):
-                try:
-                    temp_x_train[i, j, k] = voc.index(word)
-                except:
-                    temp_x_train[i, j, k] = 1
-
-    for i, col in enumerate(x_test):
-        for j, sample in enumerate(col):
-            for k, word in enumerate(sample):
-                try:
-                    temp_x_test[i, j, k] = voc.index(word)
-                except:
-                    temp_x_test[i, j, k] = 1
-
-    temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
-    temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
+    # for i, col in enumerate(x_train):
+    #     for j, sample in enumerate(col):
+    #         for k, word in enumerate(sample):
+    #             try:
+    #                 temp_x_train[i, j, k] = voc.index(word)
+    #             except:
+    #                 temp_x_train[i, j, k] = 1
+    #
+    # for i, col in enumerate(x_test):
+    #     for j, sample in enumerate(col):
+    #         for k, word in enumerate(sample):
+    #             try:
+    #                 temp_x_test[i, j, k] = voc.index(word)
+    #             except:
+    #                 temp_x_test[i, j, k] = 1
+    temp_x_train, temp_x_test = function(x_train, y_train, x_test, y_test, voc)
+    temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
+    temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
     temp_x_train_c = tensorflow.convert_to_tensor(temp_x_train[2].tolist(), dtype='int32')
     temp_y_train = tensorflow.convert_to_tensor(y_train[:, 0].tolist(), dtype="float32")
     temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
@@ -474,7 +497,7 @@ def DNN_main(x_train, y_train, x_test, y_test):
     print("Compiling.")
     model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_crossentropy", "mean_squared_error"])
     print("Fiting.")
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=500,
+    model.fit([temp_x_train_a, temp_x_train_t, temp_x_train_c], temp_y_train, batch_size=2000, epochs=500,
               validation_data=([temp_x_test_a, temp_x_test_t, temp_x_test_c], temp_y_test), verbose=1)
     print("Predicting.")
     pred = model.predict([temp_x_test_a, temp_x_test_t, temp_x_test_c])
@@ -520,7 +543,7 @@ def DNN_main(x_train, y_train, x_test, y_test):
     print("First context data:", first_data[2, :])
 
     # model.save('my_model')
-    return model
+    return model, voc
 
 
 if __name__ == "__main__":
@@ -575,10 +598,11 @@ if __name__ == "__main__":
 
     # Main Keras (Deep)
     # model = NN_3layer(train_X_rm, train_Y_rm, valid_X, valid_Y)
-    model = DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
+    model, voc = DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
     # Output what we need for the submission
     # pseudo
     #
+    temp_x_train, temp_x_test = function(train_X_rm, train_Y_rm, valid_X, valid_Y, voc)
     x = test
     test_anchor = tensorflow.convert_to_tensor(x[0].tolist(), dtype='int32')
     test_target = tensorflow.convert_to_tensor(x[1].tolist(), dtype='int32')
