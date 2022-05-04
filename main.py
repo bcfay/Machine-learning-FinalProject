@@ -16,6 +16,7 @@ from keras.preprocessing.text import Tokenizer
 word_vec_options = [50, 100, 200, 300]
 maxlen = 5  # pad length
 
+
 def euclidean_distance(vects):
     """Find the Euclidean distance between two vectors.
 
@@ -30,6 +31,7 @@ def euclidean_distance(vects):
     x, y = vects
     sum_square = tensorflow.math.reduce_sum(tensorflow.math.square(x - y), axis=1, keepdims=True)
     return tensorflow.math.sqrt(tensorflow.math.maximum(sum_square, tensorflow.keras.backend.epsilon()))
+
 
 def generate_siamese_model(x_train, x_test):
     # Define the tensors for the two input images
@@ -155,6 +157,128 @@ def generate_siamese_model(x_train, x_test):
     return siam_model, voc
 
 
+def generate_siamese_model_shallow(x_train, x_test):
+    # Define the tensors for the two input images
+    left_input = keras.Input(maxlen, dtype='int32')
+    right_input = keras.Input(maxlen, dtype='int32')
+    context_input = keras.Input(maxlen, dtype='int32')
+    max_features = 400000  # Only consider the top 20k words
+    word_vec_len = word_vec_options[3]
+
+    # ---------- glove embedding ----------
+    vectorizer = TextVectorization(max_tokens=max_features, output_sequence_length=word_vec_len)
+    hbug = np.hstack((x_train[0:3], x_test[0:3])).flatten().tolist()
+    lean_bug = []
+    for i, word in enumerate(hbug):
+        if (word == ''):
+            pass
+        else:
+            lean_bug.append(word)
+
+    # text_ds = tensorflow.data.Dataset.from_tensor_slices(hbug).batch(
+    #     128)  # TODO see if we can get the words from the other datasets in here
+    print("Vectorizor adaption.")
+    vectorizer.adapt(lean_bug)
+
+    voc = vectorizer.get_vocabulary()
+    word_index = dict(zip(voc, range(len(voc))))
+
+    # TODO this will have to be changed locally
+    # get the glove library at http://nlp.stanford.edu/data/glove.6B.zip
+    # its a pretty beefy file (abt 2gb fully extracted)
+    # path_to_glove_file = os.path.join( os.path.expanduser("~"), "D:/random big files/Machine Learning/glove.6B.100d") #Beef path
+    print("Glove reading.")
+    filepath = "glove.6B." + str(word_vec_len) + "d.txt"
+    embeddings_index = {}
+    f = open(filepath, encoding='utf-8')
+    for line in tqdm(f):
+        value = line.split(' ')
+        word = value[0]
+        coef = np.array(value[1:], dtype='float32')
+        # print("Word:", word, "Coefs:", coef)
+        embeddings_index[word] = coef
+
+    print("Found %s word vectors." % len(embeddings_index))
+
+    num_tokens = len(voc) + 2
+    hits = 0
+    misses = 0
+
+    # Prepare embedding matrix
+    embedding_matrix = np.zeros((num_tokens, word_vec_len))
+    for word, i in word_index.items():
+        embedding_vector = embeddings_index.get(word)
+        if embedding_vector is not None:
+            # Words not found in embedding index will be all-zeros.
+            # This includes the representation for "padding" and "OOV"
+            embedding_matrix[i] = embedding_vector
+            hits += 1
+        else:
+            misses += 1
+    print("Converted %d words (%d misses)" % (hits, misses))
+
+    encoder_model = keras.Sequential()
+    # Embed each integer in a glove vector
+    encoder_model.add(Embedding(num_tokens, word_vec_len,
+                                embeddings_initializer=keras.initializers.Constant(embedding_matrix),
+                                trainable=False))
+    # Add bidirectional LSTMs w/ decreasing dimentionality
+    encoder_model.add(layers.Bidirectional(layers.LSTM(256, return_sequences=True)))
+    encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
+    encoder_model.add(layers.Bidirectional(layers.LSTM(128)))
+
+    context_encoder_model = keras.Sequential()
+    context_encoder_model.add(Embedding(num_tokens, word_vec_len,
+                                        embeddings_initializer=keras.initializers.Constant(embedding_matrix),
+                                        trainable=False))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(256, return_sequences=True)))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
+    context_encoder_model.add(layers.Bidirectional(layers.LSTM(128)))
+
+    encoder_model.summary()
+
+    # [print(i.shape, i.dtype) for i in encoder_model.inputs]
+    # [print(o.shape, o.dtype) for o in encoder_model.outputs]
+    # [print(l.name, l.input_shape, l.dtype) for l in encoder_model.layers]
+
+    context_encoder_model.summary()
+    #
+    # [print(i.shape, i.dtype) for i in context_encoder_model.inputs]
+    # [print(o.shape, o.dtype) for o in context_encoder_model.outputs]
+    # [print(l.name, l.input_shape, l.dtype) for l in context_encoder_model.layers]
+
+    encoded_l = encoder_model(left_input)
+    encoded_r = encoder_model(right_input)
+    encoded_c = context_encoder_model(context_input)
+
+    merged = keras.layers.Concatenate(axis=1)([left_input, right_input, context_input])
+    dropout_rate = .01
+    # DNN = layers.Dense(200, activation="tanh")(merged)
+    # DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
+    # DNN = layers.Dense(200, activation="tanh")(DNN)
+    # DNN = layers.Dropout(dropout_rate,input_shape=(100,))(DNN)
+    # DNN = layers.Dense(50, activation="tanh")(DNN)
+    # DNN = layers.Dropout(dropout_rate,input_shape=(50,))(DNN)
+    # DNN = layers.Dense(30, activation="tanh")(DNN)
+    # DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
+    # DNN = layers.Dense(30, activation="tanh")(DNN)
+    # DNN = layers.Dropout(dropout_rate,input_shape=(30,))(DNN)
+
+    # Add a classifier
+    outputs = layers.Dense(1, activation="sigmoid")(merged)
+    # outputs = tensorflow.round(outputs)
+
+    siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
+    siam_model.summary()
+
+    # [print(i.shape, i.dtype) for i in siam_model.inputs]
+    # [print(o.shape, o.dtype) for o in siam_model.outputs]
+    # [print(l.name, l.input_shape, l.dtype) for l in siam_model.layers]
+
+    # return the model
+    return siam_model, voc
+
+
 # TODO make words separated by dashes a single word. They count as one in GLOVE but end up as 3 differnet words in our data
 # Handle the input of data from test or train
 def loadData(filepath, isTrain):
@@ -246,8 +370,68 @@ def loadData(filepath, isTrain):
     else:
         nparr = np.vstack(([anchors], [targets], [contexts]))
     print(nparr)
+    ids = df["id"]
+    return nparr, ids
 
-    return nparr
+
+def NN_3layer(x_train, y_train, x_test, y_test):
+    # DNN setup
+    print("x_train:\n", x_train)
+    print("y_train:\n", y_train)
+    print("x_test:\n", x_test)
+    print("x_train:\n", x_train, "y_train", y_train, "x_test", x_test, "y_test", y_test)
+    print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
+
+    model, voc = generate_siamese_model_shallow(x_train, x_test)
+    temp_x_train = np.empty_like(x_train, dtype=int)
+    temp_x_test = np.empty_like(x_test, dtype=int)
+
+    # TODO vectorize for speed
+    for i, col in enumerate(x_train):
+        for j, sample in enumerate(col):
+            for k, word in enumerate(sample):
+                try:
+                    temp_x_train[i, j, k] = voc.index(word)
+                except:
+                    temp_x_train[i, j, k] = 1
+
+    for i, col in enumerate(x_test):
+        for j, sample in enumerate(col):
+            for k, word in enumerate(sample):
+                try:
+                    temp_x_test[i, j, k] = voc.index(word)
+                except:
+                    temp_x_test[i, j, k] = 1
+
+    temp_x_train_t = tensorflow.convert_to_tensor(temp_x_train[0].tolist(), dtype='int32')
+    temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
+    temp_x_train_c = tensorflow.convert_to_tensor(temp_x_train[2].tolist(), dtype='int32')
+    temp_y_train = tensorflow.convert_to_tensor(y_train[:, 0].tolist(), dtype="float32")
+    temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
+    temp_x_test_t = tensorflow.convert_to_tensor(temp_x_test[1].tolist(), dtype='int32')
+    temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
+    temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
+    print("Compiling.")
+    model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_accuracy"])
+    print("Fiting.")
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=2,
+              validation_data=([temp_x_test_a, temp_x_test_t, temp_x_test_c], temp_y_test), verbose=1)
+    print("Predicting.")
+    pred = model.predict([temp_x_test_a, temp_x_test_t, temp_x_test_c])
+    worst_num = 5
+    worst = [[pred[:worst_num, 0] - y_test[:worst_num, 0]], [x_test[:worst_num, i]]]
+    for i in range(y_test.shape[1]):
+        delta = pred[i, 0] - y_test[i, 0]
+        print("prediction:", pred[i][0], "truth:", y_test[i][0], "delta:", delta)
+        print("anchor data:", x_test[0, i], "target:", x_test[1, i], "context:", x_test[2, i])
+        for i, worst_delta in enumerate(worst[0]):
+            if delta > worst_delta:
+                worst[0, i] = delta
+                worst[1, i] = x_test[:, i]
+
+    print(worst)
+    model.save('my_model')
+    return model
 
 
 def DNN_main(x_train, y_train, x_test, y_test):
@@ -283,17 +467,17 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_train_a = tensorflow.convert_to_tensor(temp_x_train[1].tolist(), dtype='int32')
     temp_x_train_c = tensorflow.convert_to_tensor(temp_x_train[2].tolist(), dtype='int32')
     temp_y_train = tensorflow.convert_to_tensor(y_train[:, 0].tolist(), dtype="float32")
-    temp_x_test_t = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
-    temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[1].tolist(), dtype='int32')
+    temp_x_test_a = tensorflow.convert_to_tensor(temp_x_test[0].tolist(), dtype='int32')
+    temp_x_test_t = tensorflow.convert_to_tensor(temp_x_test[1].tolist(), dtype='int32')
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
     print("Compiling.")
     model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_crossentropy", "mean_squared_error"])
     print("Fiting.")
     model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=500,
-              validation_data=([temp_x_test_t, temp_x_test_a, temp_x_test_c], temp_y_test), verbose=1)
+              validation_data=([temp_x_test_a, temp_x_test_t, temp_x_test_c], temp_y_test), verbose=1)
     print("Predicting.")
-    pred = model.predict([temp_x_test_t, temp_x_test_a, temp_x_test_c])
+    pred = model.predict([temp_x_test_a, temp_x_test_t, temp_x_test_c])
     worst_num = 10
     worst_preds = np.zeros(worst_num)
     worst_truths = np.zeros(worst_num)
@@ -343,8 +527,10 @@ if __name__ == "__main__":
     # Load data
     # images = np.load("fashion_mnist_{}_images.npy".format(which)) / 255.
     # labels = np.load("fashion_mnist_{}_labels.npy".format(which))
-    train = loadData("train.csv", True)  # make sure this is inside the repo on your local - it's in the gitignore
-    test = loadData("test.csv", False)  # make sure this is inside the repo on your local - it's in the gitignore
+    train, trainIDs = loadData("train.csv",
+                               True)  # make sure this is inside the repo on your local - it's in the gitignore
+    test, testIDs = loadData("test.csv",
+                             False)  # make sure this is inside the repo on your local - it's in the gitignore
     train_X = train[0]
     train_Y = train[1]
     print("Y shape is: ", train_Y.shape)
@@ -388,6 +574,18 @@ if __name__ == "__main__":
     # Shallow keras
 
     # Main Keras (Deep)
+    # model = NN_3layer(train_X_rm, train_Y_rm, valid_X, valid_Y)
     model = DNN_main(train_X_rm, train_Y_rm, valid_X, valid_Y)
     # Output what we need for the submission
-    print(model.predict(test))
+    # pseudo
+    #
+    x = test
+    test_anchor = tensorflow.convert_to_tensor(x[0].tolist(), dtype='int32')
+    test_target = tensorflow.convert_to_tensor(x[1].tolist(), dtype='int32')
+    test_context = tensorflow.convert_to_tensor(x[2].tolist(), dtype='int32')
+
+    y = model.predict(([test_anchor, test_target, test_context]))
+    df = pd.DataFrame({'id': x, 'score': y})
+    df.to_csv("submit_to_kaggle.csv", mode='a', header=False, index=False)
+    # df.tocsv()
+    # print(model.predict(test))
