@@ -319,7 +319,10 @@ def loadData(filepath, isTrain):
         expression = expression.replace(',', '')
         expression = expression.replace('-', ' ')
         expression = expression.replace(' - ', ' ')
+        expression = expression.replace('B10', 'PHYSICAL OR CHEMICAL PROCESSES OR APPARATUS IN GENERAL')
         expression = expression.lower()
+
+
         words = np.array(expression.split(' '))
         # print(words)
 
@@ -491,6 +494,7 @@ def DNN_main(x_train, y_train, x_test, y_test):
     print("Fiting.")
     model.fit([temp_x_train_a, temp_x_train_t, temp_x_train_c], temp_y_train, batch_size=2000, epochs=20,
               validation_data=([temp_x_test_a, temp_x_test_t, temp_x_test_c], temp_y_test), verbose=1)
+
     print("Predicting.")
     pred = model.predict([temp_x_test_a, temp_x_test_t, temp_x_test_c])
     worst_num = 10
