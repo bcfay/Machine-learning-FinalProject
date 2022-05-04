@@ -598,7 +598,7 @@ if __name__ == "__main__":
     test_context = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
 
     y = model.predict(([test_anchor, test_target, test_context]))
-    df = pd.DataFrame({'id': x, 'score': y})
+    df = pd.DataFrame({'id': testIDs, 'score': y})
     df.to_csv("submit_to_kaggle.csv", mode='a', header=False, index=False)
     # df.tocsv()
     # print(model.predict(test))
