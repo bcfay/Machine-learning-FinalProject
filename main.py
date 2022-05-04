@@ -110,19 +110,8 @@ def generate_siamese_model(x_train, x_test):
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(256, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(128, return_sequences=True)))
     context_encoder_model.add(layers.Bidirectional(layers.LSTM(128)))
-
     encoder_model.summary()
-
-    # [print(i.shape, i.dtype) for i in encoder_model.inputs]
-    # [print(o.shape, o.dtype) for o in encoder_model.outputs]
-    # [print(l.name, l.input_shape, l.dtype) for l in encoder_model.layers]
-
     context_encoder_model.summary()
-    #
-    # [print(i.shape, i.dtype) for i in context_encoder_model.inputs]
-    # [print(o.shape, o.dtype) for o in context_encoder_model.outputs]
-    # [print(l.name, l.input_shape, l.dtype) for l in context_encoder_model.layers]
-
     encoded_l = encoder_model(left_input)
     encoded_r = encoder_model(right_input)
     encoded_c = context_encoder_model(context_input)
@@ -143,8 +132,10 @@ def generate_siamese_model(x_train, x_test):
     DNN = layers.Dropout(dropout_rate, input_shape=(30,))(DNN)
 
     # Add a classifier
-    outputs = layers.Dense(1, activation="sigmoid")(DNN)
+    outputs = layers.Dense(1, activation="tanh")(DNN)
     outputs = layers.GaussianNoise(.0125)(outputs)
+    outputs = layers.Dense(1, activation="sigmoid")(outputs)
+
     # outputs = tensorflow.round(outputs)
 
     siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
@@ -532,15 +523,16 @@ def DNN_main(x_train, y_train, x_test, y_test):
     first_data = x_test[:, :first_num]
 
     for i in range(first_num):
+        delta = pred[i, 0] - y_test[i, 0]
         first_delta[i] = delta
         first_preds[i] = pred[i, 0]
         first_truths[i] = y_test[i, 0]
         first_data[:, i] = x_test[:, i]
         entered = True
 
-    print("Overall worst preds:", first_preds)
-    print("Overall worst truths:", first_truths)
-    print("Overall worst deltas:", first_delta)
+    print("First preds:", first_preds)
+    print("First truths:", first_truths)
+    print("First deltas:", first_delta)
     print("anchor data:", first_data[0, :])
     print("target data:", first_data[1, :])
     print("context data:", first_data[2, :])
