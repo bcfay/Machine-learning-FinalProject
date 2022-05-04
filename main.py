@@ -144,6 +144,7 @@ def generate_siamese_model(x_train, x_test):
 
     # Add a classifier
     outputs = layers.Dense(1, activation="sigmoid")(DNN)
+    outputs = layers.GaussianNoise(.0125)(outputs)
     # outputs = tensorflow.round(outputs)
 
     siam_model = keras.Model(inputs=[left_input, right_input, context_input], outputs=outputs)
@@ -472,9 +473,9 @@ def DNN_main(x_train, y_train, x_test, y_test):
     temp_x_test_c = tensorflow.convert_to_tensor(temp_x_test[2].tolist(), dtype='int32')
     temp_y_test = tensorflow.convert_to_tensor(y_test[:, 0].tolist(), dtype='float32')
     print("Compiling.")
-    model.compile("adam", "mean_squared_error", metrics=["accuracy", "binary_crossentropy", "mean_squared_error"])
+    model.compile("adam", "binary_crossentropy", metrics=["accuracy", "binary_crossentropy", "mean_squared_error"])
     print("Fiting.")
-    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=500,
+    model.fit([temp_x_train_t, temp_x_train_a, temp_x_train_c], temp_y_train, batch_size=2000, epochs=20,
               validation_data=([temp_x_test_a, temp_x_test_t, temp_x_test_c], temp_y_test), verbose=1)
     print("Predicting.")
     pred = model.predict([temp_x_test_a, temp_x_test_t, temp_x_test_c])
@@ -494,8 +495,9 @@ def DNN_main(x_train, y_train, x_test, y_test):
                 worst_data[:, j] = x_test[:, i]
                 entered = True
 
-    print("Overall worst preds:", worst_preds, "Overall worst truths:", worst_truths, "Overall worst deltas:",
-          worst_delta)
+    print("Overall worst preds:", worst_preds)
+    print("Overall worst truths:", worst_truths)
+    print("Overall worst deltas:", worst_delta)
     print("anchor data:", worst_data[0, :])
     print("target data:", worst_data[1, :])
     print("context data:", worst_data[2, :])
@@ -513,11 +515,12 @@ def DNN_main(x_train, y_train, x_test, y_test):
         first_data[:, i] = x_test[:, i]
         entered = True
 
-    print("First validation data preds:", first_preds, "First truths:", worst_truths, "First deltas:",
-          worst_delta)
-    print("First anchor data:", first_data[0, :])
-    print("First target data:", first_data[1, :])
-    print("First context data:", first_data[2, :])
+    print("Overall worst preds:", first_preds)
+    print("Overall worst truths:", first_truths)
+    print("Overall worst deltas:", first_delta)
+    print("anchor data:", first_data[0, :])
+    print("target data:", first_data[1, :])
+    print("context data:", first_data[2, :])
 
     # model.save('my_model')
     return model
